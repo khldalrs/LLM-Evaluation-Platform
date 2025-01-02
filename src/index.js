@@ -1,7 +1,7 @@
+import express from "express";
+import cors from "cors";
+import { PrismaClient } from "@prisma/client";
 import OpenAI from "openai";
-const express = require("express");
-const cors = require("cors");
-const { PrismaClient } = require("@prisma/client");
 
 const app = express();
 app.use(cors());
@@ -39,7 +39,7 @@ app.post("/experiment/runOnePrompt", async (req, res) => {
   if (!userPrompt) {
     return res
       .status(400)
-      .json({ error: "Missing 'userPrompt' in request body" });
+      .json({ error: "Missing 'userPromp  t' in request body" });
   }
 
   try {
@@ -86,47 +86,69 @@ app.post("/experiment/runOnePrompt", async (req, res) => {
     });
 
     //
-    // 4) Simulate calling 3 LLMs side by side
+    // 4) Call Groq LLM with different models
     //
-    const llmModels = ["LLM1", "LLM2", "LLM3"];
+    const llmModels = [
+      "mixtral-8x7b-32768",
+      "llama-3.3-70b-versatile",
+      "gemma2-9b-it",
+    ];
     const responses = [];
 
     for (const model of llmModels) {
       const start = Date.now();
 
-      // Simulated delay: 200-700ms. Replace with a real LLM API call if needed.
-      await new Promise((resolve) =>
-        setTimeout(resolve, 200 + Math.random() * 500)
-      );
+      try {
+        const completion = await client.chat.completions.create({
+          model: model,
+          messages: [
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        });
 
-      const end = Date.now();
-      const timeMs = end - start;
+        const end = Date.now();
+        const timeMs = end - start;
 
-      // We'll simulate a random "score" from 1 to 5
-      const score = Math.floor(Math.random() * 5) + 1;
+        // Extract the actual response text
+        const llmResponse = completion.choices[0].message.content;
 
-      // Fake LLM text
-      const llmResponse = `Simulated response from ${model} for prompt: "${userPrompt}"`;
+        // For now, we'll keep the random score (you might want to implement proper evaluation)
+        const score = Math.floor(Math.random() * 5) + 1;
 
-      //
-      // 5) Create a Result row
-      //
-      await prisma.result.create({
-        data: {
-          experimentRunId: experimentRun.id,
-          testCaseId: testCase.id,
-          llmResponse,
+        //
+        // 5) Create a Result row
+        //
+        await prisma.result.create({
+          data: {
+            experimentRunId: experimentRun.id,
+            testCaseId: testCase.id,
+            llmResponse,
+            score,
+            graderDetails: `Auto-graded. Model used: ${model}`,
+          },
+        });
+
+        responses.push({
+          model,
+          responseText: llmResponse,
+          timeMs,
           score,
-          graderDetails: `Auto-graded for demonstration. Model used: ${model}`,
-        },
-      });
-
-      responses.push({
-        model,
-        responseText: llmResponse,
-        timeMs,
-        score,
-      });
+        });
+      } catch (error) {
+        console.error(`Error calling Groq with model ${model}:`, error);
+        // Add error response to maintain the flow
+        responses.push({
+          model,
+          responseText: `Error: Failed to get response from ${model}`,
+          timeMs: 0,
+          score: 0,
+        });
+      }
     }
 
     //
