@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Experiment {
+  id                  String               @id @default(uuid())
+  name                String
+  systemPrompt        String
+  modelName           String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  experimentRuns      ExperimentRun[]
+  experimentTestCases ExperimentTestCase[]
+}
+
+model TestCase {
+  id                  String               @id @default(uuid())
+  userMessage         String
+  expectedOutput      String
+  graderType          String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  experimentTestCases ExperimentTestCase[]
+  results          Result[]
+}
+
+model ExperimentTestCase {
+  id           String     @id @default(uuid())
+  experimentId String
+  testCaseId   String
+  createdAt    DateTime   @default(now())
+  experiment   Experiment @relation(fields: [experimentId], references: [id])
+  testCase     TestCase   @relation(fields: [testCaseId], references: [id])
+
+  @@index([experimentId])
+  @@index([testCaseId])
+}
+
+model ExperimentRun {
+  id             String      @id @default(uuid())
+  experimentId   String
+  runName        String?
+  startedAt      DateTime    @default(now())
+  completedAt    DateTime?
+  aggregateScore Float?
+  createdAt      DateTime    @default(now())
+  experiment     Experiment  @relation(fields: [experimentId], references: [id])
+  results     Result[]
+
+  @@index([experimentId])
+}
+
+model Result {
+  id              String        @id @default(uuid())
+  experimentRunId String
+  testCaseId      String
+  llmResponse     String
+  score           Float?
+  graderDetails   String?
+  createdAt       DateTime      @default(now())
+  experimentRun   ExperimentRun @relation(fields: [experimentRunId], references: [id])
+  testCase        TestCase      @relation(fields: [testCaseId], references: [id])
+
+  @@index([experimentRunId])
+  @@index([testCaseId])
+}
